@@ -269,11 +269,6 @@ impl SeqDir {
     }
 
     /// Returns true if the root directory is readable.
-    ///
-    /// CAUTION: The meaning of 'available' as it is used here is not the same as how it used
-    /// within the context of a managed directory. Calling this directly means that a sequencing
-    /// directory can be read, but not necessarily that sequencing is complete and all contents
-    /// have been transferred. You probably want `is_copy_complete`.
     fn is_available(&self) -> bool {
         self.try_root().is_ok()
     }

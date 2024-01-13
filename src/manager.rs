@@ -6,90 +6,119 @@ use serde::Serialize;
 use crate::{SeqDir, SeqDirError};
 
 #[derive(Debug, Clone, Serialize)]
-pub struct AvailableSeqDir {
+#[serde(tag = "state")]
+pub enum SeqDirState {
+    Complete(CompleteSeqDir),
+    Transferring(TransferringSeqDir),
+    Sequencing(SequencingSeqDir),
+    Failed(FailedSeqDir),
+}
+
+pub trait Transition {
+    fn transition(self) -> SeqDirState;
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct CompleteSeqDir {
     #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
+    available: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct UnavailableSeqDir {
+    #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
+    available: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct SequencingSeqDir {
+    #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
+    available: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct FailedSeqDir {
+    #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
+    available: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TransferringSeqDir {
+    #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
+    available: bool,
 }
 
-impl From<AvailableSeqDir> for UnavailableSeqDir {
-    /// Available -> Unavailable
-    fn from(value: AvailableSeqDir) -> Self {
-        UnavailableSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
+impl Transition for CompleteSeqDir {
+    fn transition(self) -> SeqDirState {
+        SeqDirState::Complete(CompleteSeqDir {
+            available: self.seq_dir.is_available(),
+            ..self
+        })
+    }
+}
+
+impl Transition for TransferringSeqDir {
+    fn transition(self) -> SeqDirState {
+        if self.seq_dir.is_unavailable() {
+            return SeqDirState::Transferring(TransferringSeqDir {
+                available: false,
+                ..self
+            });
+        }
+        if self.seq_dir.is_copy_complete() {
+            SeqDirState::Complete(CompleteSeqDir::from(self))
+        } else if self.seq_dir.is_failed().unwrap_or(false) {
+            SeqDirState::Failed(FailedSeqDir::from(self))
+        } else {
+            SeqDirState::Transferring(self)
         }
     }
 }
 
-impl From<UnavailableSeqDir> for AvailableSeqDir {
-    /// Unavailable -> Available
-    fn from(value: UnavailableSeqDir) -> Self {
-        AvailableSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
+impl Transition for SequencingSeqDir {
+    fn transition(self) -> SeqDirState {
+        if self.seq_dir.is_unavailable() {
+            return SeqDirState::Sequencing(SequencingSeqDir {
+                available: false,
+                ..self
+            });
+        }
+        if self.seq_dir.is_failed().unwrap_or(false) {
+            SeqDirState::Failed(FailedSeqDir::from(self))
+        } else if self.seq_dir.is_sequencing() {
+            return SeqDirState::Sequencing(self);
+        } else if self.seq_dir.is_copy_complete() {
+            SeqDirState::Complete(CompleteSeqDir::from(self))
+        } else {
+            SeqDirState::Transferring(TransferringSeqDir::from(self))
         }
     }
 }
 
-impl From<FailedSeqDir> for UnavailableSeqDir {
-    /// Failed -> Unavailable
-    fn from(value: FailedSeqDir) -> Self {
-        UnavailableSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
-        }
+impl Transition for FailedSeqDir {
+    fn transition(self) -> SeqDirState {
+        SeqDirState::Failed(FailedSeqDir {
+            available: self.seq_dir.is_available(),
+            ..self
+        })
     }
 }
 
-impl From<UnavailableSeqDir> for SequencingSeqDir {
-    /// Unavailable -> Sequencing
-    fn from(value: UnavailableSeqDir) -> Self {
-        SequencingSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
-        }
-    }
-}
-
-impl From<UnavailableSeqDir> for FailedSeqDir {
-    /// Unavailable -> Failed
-    fn from(value: UnavailableSeqDir) -> Self {
-        FailedSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
-        }
-    }
-}
-
-impl From<SequencingSeqDir> for AvailableSeqDir {
+impl From<SequencingSeqDir> for CompleteSeqDir {
     /// Sequencing -> Available
     fn from(value: SequencingSeqDir) -> Self {
-        AvailableSeqDir {
+        CompleteSeqDir {
+            available: value.seq_dir.is_available(),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -100,16 +129,7 @@ impl From<SequencingSeqDir> for FailedSeqDir {
     /// Sequencing -> Failed
     fn from(value: SequencingSeqDir) -> Self {
         FailedSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
-        }
-    }
-}
-
-impl From<SequencingSeqDir> for UnavailableSeqDir {
-    /// Sequencing -> Unavailable
-    fn from(value: SequencingSeqDir) -> Self {
-        UnavailableSeqDir {
+            available: value.seq_dir.is_available(),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -120,36 +140,18 @@ impl From<SequencingSeqDir> for TransferringSeqDir {
     /// Sequencing -> Transferring
     fn from(value: SequencingSeqDir) -> Self {
         TransferringSeqDir {
+            available: value.seq_dir.is_available(),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
     }
 }
 
-impl From<TransferringSeqDir> for AvailableSeqDir {
+impl From<TransferringSeqDir> for CompleteSeqDir {
     /// Transferring -> Available
     fn from(value: TransferringSeqDir) -> Self {
-        AvailableSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
-        }
-    }
-}
-
-impl From<TransferringSeqDir> for UnavailableSeqDir {
-    /// Transferring -> Unavailable
-    fn from(value: TransferringSeqDir) -> Self {
-        UnavailableSeqDir {
-            seq_dir: value.seq_dir,
-            since: Utc::now(),
-        }
-    }
-}
-
-impl From<UnavailableSeqDir> for TransferringSeqDir {
-    /// Unavailable -> Transferring
-    fn from(value: UnavailableSeqDir) -> Self {
-        TransferringSeqDir {
+        CompleteSeqDir {
+            available: value.seq_dir.is_available(),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -160,20 +162,11 @@ impl From<TransferringSeqDir> for FailedSeqDir {
     /// Transferring -> Failed
     fn from(value: TransferringSeqDir) -> Self {
         FailedSeqDir {
+            available: value.seq_dir.is_available(),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(tag="state")]
-pub enum SeqDirState {
-    Available(AvailableSeqDir),
-    Transferring(TransferringSeqDir),
-    Unavailable(UnavailableSeqDir),
-    Sequencing(SequencingSeqDir),
-    Failed(FailedSeqDir),
 }
 
 impl SeqDirState {
@@ -181,8 +174,7 @@ impl SeqDirState {
     fn dir(&self) -> &SeqDir {
         match self {
             SeqDirState::Failed(dir) => &dir.seq_dir,
-            SeqDirState::Available(dir) => &dir.seq_dir,
-            SeqDirState::Unavailable(dir) => &dir.seq_dir,
+            SeqDirState::Complete(dir) => &dir.seq_dir,
             SeqDirState::Sequencing(dir) => &dir.seq_dir,
             SeqDirState::Transferring(dir) => &dir.seq_dir,
         }
@@ -192,8 +184,7 @@ impl SeqDirState {
     fn since(&self) -> &DateTime<Utc> {
         match self {
             SeqDirState::Failed(dir) => &dir.since,
-            SeqDirState::Available(dir) => &dir.since,
-            SeqDirState::Unavailable(dir) => &dir.since,
+            SeqDirState::Complete(dir) => &dir.since,
             SeqDirState::Sequencing(dir) => &dir.since,
             SeqDirState::Transferring(dir) => &dir.since,
         }
@@ -203,10 +194,18 @@ impl SeqDirState {
     fn dir_mut(&mut self) -> &mut SeqDir {
         match self {
             SeqDirState::Failed(dir) => &mut dir.seq_dir,
-            SeqDirState::Available(dir) => &mut dir.seq_dir,
-            SeqDirState::Unavailable(dir) => &mut dir.seq_dir,
+            SeqDirState::Complete(dir) => &mut dir.seq_dir,
             SeqDirState::Sequencing(dir) => &mut dir.seq_dir,
             SeqDirState::Transferring(dir) => &mut dir.seq_dir,
+        }
+    }
+
+    fn transition(self) -> Self {
+        match self {
+            SeqDirState::Complete(dir) => dir.transition(),
+            SeqDirState::Failed(dir) => dir.transition(),
+            SeqDirState::Sequencing(dir) => dir.transition(),
+            SeqDirState::Transferring(dir) => dir.transition(),
         }
     }
 }
@@ -219,9 +218,10 @@ struct DirManager {
 impl DirManager {
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, SeqDirError> {
         let mut dir_manager = DirManager {
-            seq_dir: SeqDirState::Unavailable(UnavailableSeqDir {
+            seq_dir: SeqDirState::Sequencing(SequencingSeqDir {
                 seq_dir: SeqDir::from_path(&path)?,
                 since: Utc::now(),
+                available: path.as_ref().exists(),
             }),
         };
         dir_manager.poll();
@@ -232,10 +232,9 @@ impl DirManager {
     /// Discards associated timestamp.
     pub fn into_inner(self) -> Result<SeqDir, SeqDirError> {
         match self.seq_dir {
-            SeqDirState::Available(dir) => Ok(dir.seq_dir),
+            SeqDirState::Complete(dir) => Ok(dir.seq_dir),
             SeqDirState::Sequencing(dir) => Ok(dir.seq_dir),
             SeqDirState::Failed(dir) => Ok(dir.seq_dir),
-            SeqDirState::Unavailable(dir) => Ok(dir.seq_dir),
             SeqDirState::Transferring(dir) => Ok(dir.seq_dir),
         }
     }
@@ -260,102 +259,10 @@ impl DirManager {
     /// Check if the contained SeqDir should be moved to a new state, and transition if so
     pub fn poll(&mut self) -> &SeqDirState {
         *self = match std::mem::replace(&mut self.seq_dir, _default()) {
-            SeqDirState::Available(dir) => {
-                if dir.seq_dir.try_root().is_err() {
-                    DirManager {
-                        seq_dir: SeqDirState::Unavailable(UnavailableSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else {
-                    self.seq_dir = SeqDirState::Available(dir);
-                    return self.state();
-                }
-            }
-            SeqDirState::Failed(dir) => {
-                if dir.seq_dir.is_unavailable() {
-                    DirManager {
-                        seq_dir: SeqDirState::Unavailable(UnavailableSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else {
-                    self.seq_dir = SeqDirState::Failed(dir);
-                    return self.state();
-                }
-            }
-            SeqDirState::Unavailable(dir) => {
-                if dir.seq_dir.is_unavailable() {
-                    self.seq_dir = SeqDirState::Unavailable(dir);
-                    return self.state();
-                } else if dir.seq_dir.is_failed().unwrap_or(false) {
-                    DirManager {
-                        seq_dir: SeqDirState::Failed(FailedSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else if dir.seq_dir.is_sequencing() {
-                    DirManager {
-                        seq_dir: SeqDirState::Sequencing(SequencingSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else if dir.seq_dir.is_copy_complete() {
-                    DirManager {
-                        seq_dir: SeqDirState::Available(AvailableSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else {
-                    DirManager {
-                        seq_dir: SeqDirState::Transferring(TransferringSeqDir::from(dir)),
-                        ..*self
-                    }
-                }
-            }
-            SeqDirState::Sequencing(dir) => {
-                if dir.seq_dir.is_sequencing() {
-                    self.seq_dir = SeqDirState::Sequencing(dir);
-                    return self.state();
-                }
-                if dir.seq_dir.is_unavailable() {
-                    DirManager {
-                        seq_dir: SeqDirState::Unavailable(UnavailableSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else if dir.seq_dir.is_failed().unwrap_or(false) {
-                    DirManager {
-                        seq_dir: SeqDirState::Failed(FailedSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else if dir.seq_dir.is_copy_complete() {
-                    DirManager {
-                        seq_dir: SeqDirState::Available(AvailableSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else {
-                    DirManager {
-                        seq_dir: SeqDirState::Transferring(TransferringSeqDir::from(dir)),
-                        ..*self
-                    }
-                }
-            }
-            SeqDirState::Transferring(dir) => {
-                if dir.seq_dir.is_copy_complete() {
-                    DirManager {
-                        seq_dir: SeqDirState::Available(AvailableSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else if dir.seq_dir.is_unavailable() {
-                    DirManager {
-                        seq_dir: SeqDirState::Unavailable(UnavailableSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else if dir.seq_dir.is_failed().unwrap_or(false) {
-                    DirManager {
-                        seq_dir: SeqDirState::Failed(FailedSeqDir::from(dir)),
-                        ..*self
-                    }
-                } else {
-                    self.seq_dir = SeqDirState::Transferring(dir);
-                    return self.state();
-                }
-            }
+            state => DirManager {
+                seq_dir: state.transition(),
+                ..*self
+            },
         };
         self.state()
     }
@@ -369,7 +276,8 @@ impl DirManager {
 /// This SeqDirState contains a completely invalid SeqDir and is only used as a placeholder when
 /// `poll`ing for updated state. This really should not be used anywhere else.
 fn _default() -> SeqDirState {
-    SeqDirState::Unavailable(UnavailableSeqDir {
+    // TODO the overhead of reconstructing this every time isn't great
+    SeqDirState::Sequencing(SequencingSeqDir {
         seq_dir: SeqDir {
             root: Path::new("").to_owned(),
             samplesheet: Path::new("").to_owned(),
@@ -378,6 +286,7 @@ fn _default() -> SeqDirState {
             run_completion: Path::new("").to_owned(),
         },
         since: Utc::now(),
+        available: false,
     })
 }
 
@@ -392,15 +301,15 @@ mod tests {
     const TRANSFERRING: &str = "test_data/seq_transferring/";
 
     #[test]
-    fn goes_to_available() {
+    fn goes_to_complete() {
         let mut manager = DirManager::new(&COMPLETE).unwrap();
         match manager.state() {
-            SeqDirState::Available(..) => {}
+            SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
         };
         manager.poll();
         match manager.state() {
-            SeqDirState::Available(..) => {}
+            SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
         };
     }
@@ -424,25 +333,25 @@ mod tests {
         // you cannot manage a directory that doesn't exist
         let mut manager = DirManager::new(&COMPLETE).unwrap();
         match manager.state() {
-            SeqDirState::Available(..) => {}
+            SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
         };
         manager.inner_mut().root = PathBuf::from_str("/dev/null").unwrap();
         manager.poll();
-        match manager.state() {
-            SeqDirState::Unavailable(..) => {}
-            x => panic!("expected SeqDirState::Unavailable, got {x:?}"),
+        match manager.seq_dir.dir().is_available() {
+            false => {}
+            true => panic!("expected false"),
         };
         manager.inner_mut().root = PathBuf::from_str(&COMPLETE).unwrap();
         manager.poll();
         match manager.state() {
-            SeqDirState::Available(..) => {}
+            SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
         };
     }
 
     #[test]
-    fn transferring_to_available() {
+    fn transferring_to_complete() {
         let copy_complete = PathBuf::from_str(&TRANSFERRING)
             .unwrap()
             .join("CopyComplete.txt");
@@ -455,7 +364,7 @@ mod tests {
         manager.poll();
         std::fs::remove_file(&copy_complete).unwrap();
         match manager.state() {
-            SeqDirState::Available(..) => {}
+            SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
         };
     }
@@ -466,7 +375,7 @@ mod tests {
 
         let mut manager = DirManager::new(&COMPLETE).unwrap();
         match manager.state() {
-            SeqDirState::Available(..) => {}
+            SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
         };
         manager.poll();

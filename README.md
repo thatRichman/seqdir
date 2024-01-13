@@ -9,13 +9,11 @@ The `DirManager` struct implements a state-machine on top of a SeqDir. Every tim
 
 ![State transition diagram for seqdir](./seqdir_transitions.png)
 
+Self-transitions are explicitly encoded because the availability of the directory may change even if the state does not.
+
+Complete and Failed are terminal states. They can only ever transition to themselves (availability may change during said transition).
+
 The `run_completion` module also provides methods for parsing RunCompletionStatus.xml files.
-
-### Semantics
-
-The meaning of Available in the context of the DirManager is very specific: The sequencing run is *complete* and *readable*.
-
-A Failed sequencing directory can never transition to any other state besides Unavailable (in the event the directory is deleted or is otherwise unreadable).
 
 ### Serialization Examples
 
@@ -23,7 +21,8 @@ Serialized to JSON, a SeqDirState looks like
 
 ```{json}
 {
-  "state": "Available",
+  "state": "Complete",
+  "available": true,
   "root": "test_data/seq_complete/",
   "since": "2024-01-13T02:00:00.892711400Z"
 }

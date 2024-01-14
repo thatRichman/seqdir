@@ -1,6 +1,6 @@
 seqdir
 ----------
-seqdir is a simple library for monitoring the state of Illum*na sequencing runs. It attempts to be small and robust without being overbearing. seqdir events are serializeable to \<your favorite format\>.
+seqdir is a simple library for monitoring the state of Illum*na sequencing runs. It attempts to be small and lightweight. seqdir events are serializeable to \<your favorite format\>.
 
 ### Design
 

@@ -372,7 +372,7 @@ mod tests {
 
     #[test]
     fn complete_seqdir() {
-        let seq_dir = SeqDir::from_completed(&COMPLETE).unwrap();
+        let seq_dir = SeqDir::from_completed(COMPLETE).unwrap();
         seq_dir.samplesheet().unwrap();
         seq_dir.run_info().unwrap();
         seq_dir.run_params().unwrap();
@@ -386,17 +386,17 @@ mod tests {
 
     #[test]
     fn failed_seqdir() {
-        let seq_dir = SeqDir::from_path(&FAILED).unwrap();
+        let seq_dir = SeqDir::from_path(FAILED).unwrap();
         assert!(seq_dir.is_failed().unwrap());
         assert!(matches!(
-            SeqDir::from_completed(&FAILED),
+            SeqDir::from_completed(FAILED),
             Err(SeqDirError::CompletionStatus(..))
         ));
     }
 
     #[test]
     fn transferring_seqdir() {
-        let seq_dir = SeqDir::from_path(&TRANSFERRING).unwrap();
+        let seq_dir = SeqDir::from_path(TRANSFERRING).unwrap();
         assert!(seq_dir.is_available());
         assert!(seq_dir.is_sequence_complete());
         assert!(!seq_dir.is_sequencing());
@@ -407,7 +407,7 @@ mod tests {
 
     #[test]
     fn sequencing_seqdir() {
-        let seq_dir = SeqDir::from_path(&SEQUENCING).unwrap();
+        let seq_dir = SeqDir::from_path(SEQUENCING).unwrap();
         assert!(seq_dir.is_available());
         assert!(!seq_dir.is_sequence_complete());
         assert!(seq_dir.is_sequencing());

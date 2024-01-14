@@ -124,7 +124,7 @@ mod tests {
 
     #[test]
     fn parse_completed() {
-        let completion_status = parse_run_completion(&COMPLETED_RCS).unwrap();
+        let completion_status = parse_run_completion(COMPLETED_RCS).unwrap();
 
         match completion_status {
             CompletionStatus::CompletedAsPlanned(message) => {
@@ -137,7 +137,7 @@ mod tests {
 
     #[test]
     fn parse_failed() {
-        let completion_status = parse_run_completion(&FAILED_RCS).unwrap();
+        let completion_status = parse_run_completion(FAILED_RCS).unwrap();
 
         match completion_status {
             CompletionStatus::ExceptionEndedEarly(message) => {
@@ -151,14 +151,14 @@ mod tests {
     // TODO fuzz
     #[test]
     fn bad_message_does_not_panic() {
-        assert!(parse_run_completion(&GARBAGE_RCS).is_err());
+        assert!(parse_run_completion(GARBAGE_RCS).is_err());
     }
 
     #[test]
     fn test_serialize() {
         use serde_json;
 
-        let completion_status = parse_run_completion(&COMPLETED_RCS).unwrap();
+        let completion_status = parse_run_completion(COMPLETED_RCS).unwrap();
         serde_json::to_string(&completion_status).unwrap();
     }
 }

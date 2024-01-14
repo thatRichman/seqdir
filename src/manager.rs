@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn goes_to_complete() {
-        let mut manager = DirManager::new(&COMPLETE).unwrap();
+        let mut manager = DirManager::new(COMPLETE).unwrap();
         match manager.state() {
             SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn goes_to_failed() {
-        let mut manager = DirManager::new(&FAILED).unwrap();
+        let mut manager = DirManager::new(FAILED).unwrap();
         match manager.state() {
             SeqDirState::Failed(..) => {}
             x => panic!("expected SeqDirState::Failed, got {x:?}"),
@@ -331,7 +331,7 @@ mod tests {
     #[test]
     fn goes_to_unavailable() {
         // you cannot manage a directory that doesn't exist
-        let mut manager = DirManager::new(&COMPLETE).unwrap();
+        let mut manager = DirManager::new(COMPLETE).unwrap();
         match manager.state() {
             SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),
@@ -342,7 +342,7 @@ mod tests {
             false => {}
             true => panic!("expected false"),
         };
-        manager.inner_mut().root = PathBuf::from_str(&COMPLETE).unwrap();
+        manager.inner_mut().root = PathBuf::from_str(COMPLETE).unwrap();
         manager.poll();
         match manager.state() {
             SeqDirState::Complete(..) => {}
@@ -352,10 +352,10 @@ mod tests {
 
     #[test]
     fn transferring_to_complete() {
-        let copy_complete = PathBuf::from_str(&TRANSFERRING)
+        let copy_complete = PathBuf::from_str(TRANSFERRING)
             .unwrap()
             .join("CopyComplete.txt");
-        let mut manager = DirManager::new(&TRANSFERRING).unwrap();
+        let mut manager = DirManager::new(TRANSFERRING).unwrap();
         match manager.state() {
             SeqDirState::Transferring(..) => {}
             x => panic!("expected SeqDirState::Transferring, got {x:?}"),
@@ -373,7 +373,7 @@ mod tests {
     fn test_serialize_to_json() {
         use serde_json;
 
-        let mut manager = DirManager::new(&COMPLETE).unwrap();
+        let mut manager = DirManager::new(COMPLETE).unwrap();
         match manager.state() {
             SeqDirState::Complete(..) => {}
             x => panic!("expected SeqDirState::Available, got {x:?}"),

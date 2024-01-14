@@ -9,7 +9,7 @@ on:
 
 jobs:
 
-  test_phaser:
+  test_seqdir:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -18,27 +18,24 @@ jobs:
         run: |
           rustup update
           rustup component add clippy
-          rustup install nightly          
+          rustup install nightly
 
       - name: Toolchain info
         run: |
           cargo --version --verbose
           rustc --version
-          cargo clippy --version          
+          cargo clippy --version
 
       - name: Lint
         run: |
-          cd phaser
           cargo fmt -- --check
-          cargo clippy -- -D warnings          
+          cargo clippy -- -D warnings
 
       - name: Test
         run: |
-          cd phaser
           cargo check
-          cargo test --all          
+          cargo test --all
 
       - name: Build
         run: |
-          cd phaser
-          cargo build --release          
+          cargo build --release

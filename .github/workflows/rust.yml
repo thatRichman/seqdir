@@ -28,14 +28,17 @@ jobs:
 
       - name: Lint
         run: |
+          cd seqdir
           cargo fmt -- --check
           cargo clippy -- -D warnings
 
       - name: Test
         run: |
+          cd seqdir
           cargo check
           cargo test --all
 
       - name: Build
         run: |
+          cd seqdir
           cargo build --release

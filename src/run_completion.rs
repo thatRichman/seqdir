@@ -28,7 +28,7 @@ impl Display for Message {
 
 #[non_exhaustive]
 #[derive(Clone, Debug, Serialize)]
-#[serde(tag="completion_status")]
+#[serde(tag = "completion_status")]
 pub enum CompletionStatus {
     CompletedAsPlanned(Message),
     ExceptionEndedEarly(Message),

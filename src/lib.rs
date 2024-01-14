@@ -81,7 +81,7 @@ pub struct Cycle {
 }
 
 impl Cycle {
-    fn from_path<P: AsRef<Path>>(path: P) -> Result<Cycle, SeqDirError> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Cycle, SeqDirError> {
         let cycle_num = path
             .as_ref()
             .file_stem()
@@ -103,11 +103,11 @@ impl Cycle {
         Ok(Cycle { cycle_num, bcls })
     }
 
-    fn cycle_num(&self) -> u16 {
+    pub fn cycle_num(&self) -> u16 {
         self.cycle_num
     }
 
-    fn bcls(&self) -> &Vec<Bcl> {
+    pub fn bcls(&self) -> &Vec<Bcl> {
         &self.bcls
     }
 }
@@ -235,7 +235,7 @@ impl SeqDir {
 
     /// Try to get the root of the sequencing directory.
     /// Returns SeqDirError::NotFound if directory is inaccessible.
-    fn try_root(&self) -> Result<&Path, SeqDirError> {
+    pub fn try_root(&self) -> Result<&Path, SeqDirError> {
         self.root()
             .is_dir()
             .then(|| self.root())
@@ -243,24 +243,24 @@ impl SeqDir {
     }
 
     /// Returns true if CopyComplete.txt exists.
-    fn is_copy_complete(&self) -> bool {
+    pub fn is_copy_complete(&self) -> bool {
         self.root().join(COPY_COMPLETE_TXT).exists()
     }
 
     /// Returns true if RTAComplete.txt exists.
-    fn is_rta_complete(&self) -> bool {
+    pub fn is_rta_complete(&self) -> bool {
         self.root().join(RTA_COMPLETE_TXT).exists()
     }
 
     /// Returns true if SequenceComplete.txt exists.
-    fn is_sequence_complete(&self) -> bool {
+    pub fn is_sequence_complete(&self) -> bool {
         self.root().join(SEQUENCE_COMPLETE_TXT).exists()
     }
 
     /// Get an arbitrary file rooted at the base of the sequencing directory.
     ///
     /// Returns SeqDirError::NotFound if file does not exist or is inaccessible.
-    fn get_file<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, SeqDirError> {
+    pub fn get_file<P: AsRef<Path>>(&self, path: P) -> Result<PathBuf, SeqDirError> {
         self.root()
             .join(&path)
             .is_file()
@@ -269,24 +269,24 @@ impl SeqDir {
     }
 
     /// Returns true if the root directory is readable.
-    fn is_available(&self) -> bool {
+    pub fn is_available(&self) -> bool {
         self.try_root().is_ok()
     }
 
     // Returns true if the root directory cannot be read
-    fn is_unavailable(&self) -> bool {
+    pub fn is_unavailable(&self) -> bool {
         self.try_root().is_err()
     }
 
     /// Attempt to parse RunCompletionStatus.xml and return a `CompletionStatus`
-    fn get_completion_status(&self) -> Option<Result<CompletionStatus, SeqDirError>> {
+    pub fn get_completion_status(&self) -> Option<Result<CompletionStatus, SeqDirError>> {
         Some(parse_run_completion(self.run_completion_status()?).map_err(SeqDirError::from))
     }
 
     /// Attempt to determine if a run has failed sequencing.
     /// Uses RunCompletionStatus.xml. If RunCompletionStatus is not available, returns false.
     /// unlike other `is_` library methods, this is fallible because it must parse a file.
-    fn is_failed(&self) -> Result<bool, SeqDirError> {
+    pub fn is_failed(&self) -> Result<bool, SeqDirError> {
         match self.get_completion_status() {
             None => Ok(false),
             Some(Err(e)) => Err(e),
@@ -299,19 +299,19 @@ impl SeqDir {
 
     /// Returns true if SequenceComplete.txt is not present
     /// Convenience method, inverts `is_sequence_complete`
-    fn is_sequencing(&self) -> bool {
+    pub fn is_sequencing(&self) -> bool {
         !self.is_sequence_complete()
     }
 
     /// Returns reference to seqdir root
-    fn root(&self) -> &Path {
+    pub fn root(&self) -> &Path {
         &self.root
     }
 
     /// Get the path to SampleSheet.csv
     ///
     /// Returns SeqDirError::NotFound if path does not exist or is inaccessible.
-    fn samplesheet(&self) -> Result<&Path, SeqDirError> {
+    pub fn samplesheet(&self) -> Result<&Path, SeqDirError> {
         self.samplesheet
             .is_file()
             .then_some(self.samplesheet.as_path())
@@ -321,7 +321,7 @@ impl SeqDir {
     /// Get the path to RunInfo.xml
     ///
     /// Returns SeqDirError::NotFound if path does not exist or is inaccessible.
-    fn run_info(&self) -> Result<&Path, SeqDirError> {
+    pub fn run_info(&self) -> Result<&Path, SeqDirError> {
         self.run_info
             .is_file()
             .then_some(self.run_info.as_path())
@@ -331,7 +331,7 @@ impl SeqDir {
     /// Get the path to RunParameters.xml
     ///
     /// Returns SeqDirError::NotFound if path does not exist or is inaccessible.
-    fn run_params(&self) -> Result<&Path, SeqDirError> {
+    pub fn run_params(&self) -> Result<&Path, SeqDirError> {
         self.run_params
             .is_file()
             .then_some(self.run_params.as_path())
@@ -341,7 +341,7 @@ impl SeqDir {
     /// Get the path to RunCompletionStatus.xml
     /// Returns Option because not all illumina sequencers generate this file.
     /// To actually parse RunCompletionStatus.xml, see `get_completion_status`
-    fn run_completion_status(&self) -> Option<&Path> {
+    pub fn run_completion_status(&self) -> Option<&Path> {
         self.run_completion
             .is_file()
             .then_some(self.run_completion.as_path())

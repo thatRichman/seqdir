@@ -84,7 +84,7 @@ pub fn parse_run_completion<P: AsRef<Path>>(path: P) -> Result<CompletionStatus,
     {
         Some(node) => match node.text() {
             None => None,
-            Some(text) if text == "None" => None,
+            Some("None") => None,
             Some(text) => Some(text.to_string()),
         },
         None => None,

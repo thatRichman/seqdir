@@ -171,7 +171,7 @@ impl From<TransferringSeqDir> for FailedSeqDir {
 
 impl SeqDirState {
     /// Reference to inner SeqDir
-    fn dir(&self) -> &SeqDir {
+    pub fn dir(&self) -> &SeqDir {
         match self {
             SeqDirState::Failed(dir) => &dir.seq_dir,
             SeqDirState::Complete(dir) => &dir.seq_dir,
@@ -181,7 +181,7 @@ impl SeqDirState {
     }
 
     /// Timestamp of when state was entered
-    fn since(&self) -> &DateTime<Utc> {
+    pub fn since(&self) -> &DateTime<Utc> {
         match self {
             SeqDirState::Failed(dir) => &dir.since,
             SeqDirState::Complete(dir) => &dir.since,
@@ -191,7 +191,7 @@ impl SeqDirState {
     }
 
     /// Mutable reference to inner SeqDir
-    fn dir_mut(&mut self) -> &mut SeqDir {
+    pub fn dir_mut(&mut self) -> &mut SeqDir {
         match self {
             SeqDirState::Failed(dir) => &mut dir.seq_dir,
             SeqDirState::Complete(dir) => &mut dir.seq_dir,
@@ -211,7 +211,7 @@ impl SeqDirState {
 }
 
 #[derive(Clone)]
-struct DirManager {
+pub struct DirManager {
     seq_dir: SeqDirState,
 }
 
@@ -258,11 +258,9 @@ impl DirManager {
 
     /// Check if the contained SeqDir should be moved to a new state, and transition if so
     pub fn poll(&mut self) -> &SeqDirState {
-        *self = match std::mem::replace(&mut self.seq_dir, _default()) {
-            state => DirManager {
-                seq_dir: state.transition(),
-                ..*self
-            },
+        let state = std::mem::replace(&mut self.seq_dir, _default());
+        *self = DirManager {
+            seq_dir: state.transition(),
         };
         self.state()
     }

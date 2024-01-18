@@ -5,8 +5,14 @@ use serde::Serialize;
 
 use crate::{SeqDir, SeqDirError};
 
-#[derive(Debug, Clone, Serialize)]
+pub(crate) mod sealed {
+    pub trait Sealed {}
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "state")]
+/// The current state of the SeqDir.
+/// Each variant wraps the corresponding struct.
 pub enum SeqDirState {
     Complete(CompleteSeqDir),
     Transferring(TransferringSeqDir),
@@ -14,54 +20,90 @@ pub enum SeqDirState {
     Failed(FailedSeqDir),
 }
 
-pub trait Transition {
+#[derive(Debug, Clone, Copy, Serialize, PartialEq)]
+/// Represents the availability of a directory, as determined by whether it can be read or not.
+/// Contains a [DateTime] in UTC of when the availability last changed.
+pub enum Availability {
+    Available(DateTime<Utc>),
+    Unavailable(DateTime<Utc>),
+}
+
+impl Availability {
+    /// Compares self to updated availability. If it differs, emit
+    /// the correct variant with updated timestamp. Otherwise,
+    /// return self with original timestamp.
+    pub fn check<P: AsRef<Path>>(self, path: P) -> Availability {
+        let exists = path.as_ref().exists();
+        match self {
+            Availability::Available(..) => {
+                if exists {
+                    self
+                } else {
+                    Availability::Unavailable(Utc::now())
+                }
+            }
+            Availability::Unavailable(..) => {
+                if exists {
+                    Availability::Available(Utc::now())
+                } else {
+                    self
+                }
+            }
+        }
+    }
+}
+
+/// Implemented for structs that can transition to another state.
+pub trait Transition: sealed::Sealed {
+    /// struct is consumed and wrapped by the appropriate [SeqDirState]
     fn transition(self) -> SeqDirState;
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
+/// A directory that has completed sequencing.
 pub struct CompleteSeqDir {
     #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
-    available: bool,
+    availability: Availability,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct UnavailableSeqDir {
-    #[serde(flatten)]
-    seq_dir: SeqDir,
-    since: DateTime<Utc>,
-    available: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
+/// A directory whose run is actively sequencing
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct SequencingSeqDir {
     #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
-    available: bool,
+    availability: Availability,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/// A directory whose run has failed sequencing.
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct FailedSeqDir {
     #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
-    available: bool,
+    availability: Availability,
 }
 
-#[derive(Debug, Clone, Serialize)]
+/// A directory whose run is transferring.
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct TransferringSeqDir {
     #[serde(flatten)]
     seq_dir: SeqDir,
     since: DateTime<Utc>,
-    available: bool,
+    availability: Availability,
 }
+
+impl sealed::Sealed for CompleteSeqDir {}
+impl sealed::Sealed for TransferringSeqDir {}
+impl sealed::Sealed for FailedSeqDir {}
+impl sealed::Sealed for SequencingSeqDir {}
 
 impl Transition for CompleteSeqDir {
     fn transition(self) -> SeqDirState {
         SeqDirState::Complete(CompleteSeqDir {
-            available: self.seq_dir.is_available(),
+            availability: self.availability.check(self.seq_dir.root()),
             ..self
         })
     }
@@ -71,7 +113,7 @@ impl Transition for TransferringSeqDir {
     fn transition(self) -> SeqDirState {
         if self.seq_dir.is_unavailable() {
             return SeqDirState::Transferring(TransferringSeqDir {
-                available: false,
+                availability: self.availability.check(self.seq_dir.root()),
                 ..self
             });
         }
@@ -89,7 +131,7 @@ impl Transition for SequencingSeqDir {
     fn transition(self) -> SeqDirState {
         if self.seq_dir.is_unavailable() {
             return SeqDirState::Sequencing(SequencingSeqDir {
-                available: false,
+                availability: self.availability.check(self.seq_dir.root()),
                 ..self
             });
         }
@@ -108,7 +150,7 @@ impl Transition for SequencingSeqDir {
 impl Transition for FailedSeqDir {
     fn transition(self) -> SeqDirState {
         SeqDirState::Failed(FailedSeqDir {
-            available: self.seq_dir.is_available(),
+            availability: self.availability.check(self.seq_dir.root()),
             ..self
         })
     }
@@ -118,7 +160,7 @@ impl From<SequencingSeqDir> for CompleteSeqDir {
     /// Sequencing -> Available
     fn from(value: SequencingSeqDir) -> Self {
         CompleteSeqDir {
-            available: value.seq_dir.is_available(),
+            availability: value.availability.check(value.seq_dir.root()),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -129,7 +171,7 @@ impl From<SequencingSeqDir> for FailedSeqDir {
     /// Sequencing -> Failed
     fn from(value: SequencingSeqDir) -> Self {
         FailedSeqDir {
-            available: value.seq_dir.is_available(),
+            availability: value.availability.check(value.seq_dir.root()),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -140,7 +182,7 @@ impl From<SequencingSeqDir> for TransferringSeqDir {
     /// Sequencing -> Transferring
     fn from(value: SequencingSeqDir) -> Self {
         TransferringSeqDir {
-            available: value.seq_dir.is_available(),
+            availability: value.availability.check(value.seq_dir.root()),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -151,7 +193,7 @@ impl From<TransferringSeqDir> for CompleteSeqDir {
     /// Transferring -> Available
     fn from(value: TransferringSeqDir) -> Self {
         CompleteSeqDir {
-            available: value.seq_dir.is_available(),
+            availability: value.availability.check(value.seq_dir.root()),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -162,7 +204,7 @@ impl From<TransferringSeqDir> for FailedSeqDir {
     /// Transferring -> Failed
     fn from(value: TransferringSeqDir) -> Self {
         FailedSeqDir {
-            available: value.seq_dir.is_available(),
+            availability: value.availability.check(value.seq_dir.root()),
             seq_dir: value.seq_dir,
             since: Utc::now(),
         }
@@ -170,7 +212,7 @@ impl From<TransferringSeqDir> for FailedSeqDir {
 }
 
 impl SeqDirState {
-    /// Reference to inner SeqDir
+    /// Returns a reference to the inner SeqDir
     pub fn dir(&self) -> &SeqDir {
         match self {
             SeqDirState::Failed(dir) => &dir.seq_dir,
@@ -180,7 +222,7 @@ impl SeqDirState {
         }
     }
 
-    /// Timestamp of when state was entered
+    /// Timestamp of when state was entered.
     pub fn since(&self) -> &DateTime<Utc> {
         match self {
             SeqDirState::Failed(dir) => &dir.since,
@@ -191,7 +233,8 @@ impl SeqDirState {
     }
 
     /// Mutable reference to inner SeqDir
-    pub fn dir_mut(&mut self) -> &mut SeqDir {
+    #[cfg(test)]
+    fn dir_mut(&mut self) -> &mut SeqDir {
         match self {
             SeqDirState::Failed(dir) => &mut dir.seq_dir,
             SeqDirState::Complete(dir) => &mut dir.seq_dir,
@@ -208,20 +251,79 @@ impl SeqDirState {
             SeqDirState::Transferring(dir) => dir.transition(),
         }
     }
+
+    /// Returns reference to the current [Availability] of the sequencing directory.
+    ///
+    /// Does *not* re-evaluate availablity. It is not recommended that you keep
+    /// long-lasting references to the returned value.
+    pub fn availablity(&self) -> &Availability {
+        match self {
+            SeqDirState::Complete(dir) => &dir.availability,
+            SeqDirState::Failed(dir) => &dir.availability,
+            SeqDirState::Sequencing(dir) => &dir.availability,
+            SeqDirState::Transferring(dir) => &dir.availability,
+        }
+    }
 }
 
 #[derive(Clone)]
+/// Implements a state machine for managing the state of a [SeqDir].
+///
+/// The state transition diagram is as follows:
+///
+///```none
+///        ┌──────────────────────┐
+///        ▼                      │
+///      ┌──────────────┐         │
+///      │              │ ───┐    │
+///      │    Failed    │    │    │
+///      │              │ ◀──┘    │
+///      └──────────────┘         │
+///        ▲                      │
+///        │                      │
+///        │                      │
+///      ┌──────────────┐         │
+/// ┌─── │              │         │
+/// │    │  Sequencing  │         │
+/// └──▶ │              │ ─┐      │
+///      └──────────────┘  │      │
+///        │               │      │
+///        │               │      │
+///        ▼               │      │
+///      ┌──────────────┐  │      │
+/// ┌─── │              │  │      │
+/// │    │ Transferring │  │      │
+/// └──▶ │              │ ─┼──────┘
+///      └──────────────┘  │
+///        │               │
+///        │               │
+///        ▼               │
+///      ┌──────────────┐  │
+/// ┌─── │              │  │
+/// │    │   Complete   │  │
+/// └──▶ │              │ ◀┘
+///      └──────────────┘
+///```
+/// Once a directory has gone to either [Complete](SeqDirState::Complete) or
+/// [Failed](SeqDirState::Failed), it cannot transition back to another state.
+/// However, the availability of the dir may still update on every call to [poll].
+///
 pub struct DirManager {
     seq_dir: SeqDirState,
 }
 
 impl DirManager {
+    /// Construct a new DirManager from a path.
+    ///
+    /// The initial state will always be Sequencing', but `poll` is called
+    /// automatically before returning, so the state will be accurate.
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self, SeqDirError> {
+        let seq_dir = SeqDir::from_path(&path)?;
         let mut dir_manager = DirManager {
             seq_dir: SeqDirState::Sequencing(SequencingSeqDir {
-                seq_dir: SeqDir::from_path(&path)?,
+                seq_dir,
                 since: Utc::now(),
-                available: path.as_ref().exists(),
+                availability: Availability::Available(Utc::now()),
             }),
         };
         dir_manager.poll();
@@ -229,6 +331,7 @@ impl DirManager {
     }
 
     /// Consume the DirManager, returning contained SeqDir, regardless of state.
+    ///
     /// Discards associated timestamp.
     pub fn into_inner(self) -> Result<SeqDir, SeqDirError> {
         match self.seq_dir {
@@ -239,15 +342,14 @@ impl DirManager {
         }
     }
 
-    /// Reference to the inner SeqDir being managed
+    /// Returns reference to the inner SeqDir being managed.
     pub fn inner(&self) -> &SeqDir {
         self.seq_dir.dir()
     }
 
-    /// Mutable reference to inner SeqDir being managed
-    /// It is not recommended that you mutate the inner Seqdir directly unless you have a very good
-    /// reason to. Doing so can cause unexpected behavior.
-    pub fn inner_mut(&mut self) -> &mut SeqDir {
+    /// Mutable reference to inner SeqDir being managed.
+    #[cfg(test)]
+    fn inner_mut(&mut self) -> &mut SeqDir {
         self.seq_dir.dir_mut()
     }
 
@@ -256,35 +358,41 @@ impl DirManager {
         &self.seq_dir
     }
 
-    /// Check if the contained SeqDir should be moved to a new state, and transition if so
+    /// Attempt to perform a transition, possibly updating the state.
+    ///
+    /// Returns reference to current state.
     pub fn poll(&mut self) -> &SeqDirState {
         let state = std::mem::replace(&mut self.seq_dir, _default());
-        *self = DirManager {
-            seq_dir: state.transition(),
-        };
+        self.seq_dir = state.transition();
         self.state()
     }
 
-    /// Timestamp of when the DirManager's SeqDir entered its current state
+    /// Timestamp of when the DirManager's SeqDir entered its current state.
     pub fn since(&self) -> &DateTime<Utc> {
         self.seq_dir.since()
     }
+
+    pub fn availablity(&self) -> &Availability {
+        self.seq_dir.availablity()
+    }
 }
 
+#[doc(hidden)]
 /// This SeqDirState contains a completely invalid SeqDir and is only used as a placeholder when
 /// `poll`ing for updated state. This really should not be used anywhere else.
 fn _default() -> SeqDirState {
     // TODO the overhead of reconstructing this every time isn't great
+    let seq_dir = SeqDir {
+        root: Path::new("").to_owned(),
+        samplesheet: Path::new("").to_owned(),
+        run_info: Path::new("").to_owned(),
+        run_params: Path::new("").to_owned(),
+        run_completion: Path::new("").to_owned(),
+    };
     SeqDirState::Sequencing(SequencingSeqDir {
-        seq_dir: SeqDir {
-            root: Path::new("").to_owned(),
-            samplesheet: Path::new("").to_owned(),
-            run_info: Path::new("").to_owned(),
-            run_params: Path::new("").to_owned(),
-            run_completion: Path::new("").to_owned(),
-        },
+        seq_dir,
         since: Utc::now(),
-        available: false,
+        availability: Availability::Unavailable(Utc::now()),
     })
 }
 
@@ -378,6 +486,6 @@ mod tests {
         };
         manager.poll();
 
-        serde_json::to_string(manager.state()).unwrap();
+        dbg!(serde_json::to_string(manager.state()).unwrap());
     }
 }

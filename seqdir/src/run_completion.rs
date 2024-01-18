@@ -10,6 +10,7 @@ const COMPLETION_STATUS: &str = "CompletionStatus";
 const ERROR_DESCRIPTION: &str = "ErrorDescription";
 
 #[derive(Clone, Debug, Serialize)]
+/// A RunCompletionStatus message. Consists of a run_id and optional message content
 pub struct Message {
     pub run_id: String,
     pub message: Option<String>,
@@ -29,6 +30,7 @@ impl Display for Message {
 #[non_exhaustive]
 #[derive(Clone, Debug, Serialize)]
 #[serde(tag = "completion_status")]
+/// The completion status of a run as extracted from RunCompletionStatus.xml
 pub enum CompletionStatus {
     CompletedAsPlanned(Message),
     ExceptionEndedEarly(Message),
@@ -48,6 +50,9 @@ impl Display for CompletionStatus {
     }
 }
 
+/// Attempts to parse a file in the format of RunCompletionStatus.xml
+///
+/// Returns a [CompletionStatus] wrapping the associated [Message]
 pub fn parse_run_completion<P: AsRef<Path>>(path: P) -> Result<CompletionStatus, std::io::Error> {
     let mut handle = File::open(&path)?;
     let mut raw_contents = String::new();

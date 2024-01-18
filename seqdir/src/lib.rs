@@ -29,6 +29,27 @@ const BCL: &str = "bcl";
 const BCL_GZ: &str = "bcl.gz";
 const CYCLE_PREFIX: &str = "C";
 
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum SeqDirError {
+    #[error("cannot find {0} or it is not readable")]
+    NotFound(PathBuf),
+    #[error("cannot find lane directories")]
+    MissingLaneDirs,
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error("found no cycles")]
+    MissingCycles,
+    #[error("found no bcls for cycle {0}")]
+    MissingBcls(u16),
+    #[error("expected cycle directory in format of C###.#, found: {0}")]
+    BadCycle(PathBuf),
+    #[error(transparent)]
+    ParseIntError(#[from] ParseIntError),
+    #[error("unexpected run completion status: {0}")]
+    CompletionStatus(CompletionStatus),
+}
+
 /// A BCL or a CBCL
 #[derive(Clone, Debug, Serialize)]
 pub enum Bcl {
@@ -51,26 +72,6 @@ impl Bcl {
             None
         }
     }
-}
-
-#[derive(Debug, Error)]
-pub enum SeqDirError {
-    #[error("cannot find {0} or it is not readable")]
-    NotFound(PathBuf),
-    #[error("cannot find lane directories")]
-    MissingLaneDirs,
-    #[error(transparent)]
-    IoError(#[from] std::io::Error),
-    #[error("found no cycles")]
-    MissingCycles,
-    #[error("found no bcls for cycle {0}")]
-    MissingBcls(u16),
-    #[error("expected cycle directory in format of C###.#, found: {0}")]
-    BadCycle(PathBuf),
-    #[error(transparent)]
-    ParseIntError(#[from] ParseIntError),
-    #[error("unexpected run completion status: {0}")]
-    CompletionStatus(CompletionStatus),
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -164,7 +165,7 @@ where
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 /// An Illumina sequencing directory
 pub struct SeqDir {
     root: PathBuf,
@@ -200,8 +201,8 @@ impl SeqDir {
 
     /// Create a new SeqDir from a completed sequencing directory.
     ///
-    /// Errors if the sequencing directory is not complete. Completion is determined by the
-    /// following:
+    /// Errors if the sequencing directory is not complete.
+    /// Completion is determined by the following:
     /// 1. CopyComplete.txt is present
     /// 2. RunCompletionStatus (if present) is CompletedAsPlanned
     pub fn from_completed<P: AsRef<Path>>(path: P) -> Result<Self, SeqDirError> {
@@ -278,7 +279,8 @@ impl SeqDir {
         self.try_root().is_err()
     }
 
-    /// Attempt to parse RunCompletionStatus.xml and return a `CompletionStatus`
+    /// Attempt to parse RunCompletionStatus.xml and return a
+    /// Option<Result<[CompletionStatus]>>
     pub fn get_completion_status(&self) -> Option<Result<CompletionStatus, SeqDirError>> {
         Some(parse_run_completion(self.run_completion_status()?).map_err(SeqDirError::from))
     }
@@ -339,8 +341,9 @@ impl SeqDir {
     }
 
     /// Get the path to RunCompletionStatus.xml
-    /// Returns Option because not all illumina sequencers generate this file.
-    /// To actually parse RunCompletionStatus.xml, see `get_completion_status`
+    /// Returns Option because not all illumina sequencers / platform versions generate this file.
+    /// To actually parse RunCompletionStatus.xml, see
+    /// [get_completion_status](crate::SeqDir.get_completion_status)
     pub fn run_completion_status(&self) -> Option<&Path> {
         self.run_completion
             .is_file()

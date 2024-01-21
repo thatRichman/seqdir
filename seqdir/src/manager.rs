@@ -158,6 +158,7 @@ impl sealed::Sealed for TransferringSeqDir {}
 impl sealed::Sealed for FailedSeqDir {}
 impl sealed::Sealed for SequencingSeqDir {}
 
+/// Completed must only transition to itself, possibly updating its [Availability]
 impl Transition for CompleteSeqDir {
     fn transition(self) -> SeqDirState {
         SeqDirState::Complete(CompleteSeqDir {
@@ -167,6 +168,12 @@ impl Transition for CompleteSeqDir {
     }
 }
 
+/// Transferring may transition to itself, Failed, or Complete
+///
+/// Availability is checked first. If the directory is Unavailable, no transition will occur.
+/// If CopyComplete.txt is found, transitions to Completed.
+/// If [is_failed](SeqDir::is_failed()) returns true, transitions to Failed.
+/// Otherwise, availability is updated and returns self.
 impl Transition for TransferringSeqDir {
     fn transition(self) -> SeqDirState {
         if self.seq_dir.is_unavailable() {
@@ -180,11 +187,21 @@ impl Transition for TransferringSeqDir {
         } else if self.seq_dir.is_failed().unwrap_or(false) {
             SeqDirState::Failed(FailedSeqDir::from(self))
         } else {
-            SeqDirState::Transferring(self)
+            SeqDirState::Transferring(TransferringSeqDir {
+                availability: self.availability.check(self.seq_dir.root()),
+                ..self
+            })
         }
     }
 }
 
+/// Sequencing may transfer to any other state
+///
+/// Availability is checked first. If the directory is Unavailable, no transition will occur.
+/// If [is_failed](SeqDir::is_failed()) returns true, transitions to Failed.
+/// If SequenceComplete.txt is not found, availablility is updated and returns self.
+/// If CopyComplete.txt is found, transitions to Completed.
+/// Otherwise, is assumed to be Transferring (as SequenceComplete is present but not CopyComplete).
 impl Transition for SequencingSeqDir {
     fn transition(self) -> SeqDirState {
         if self.seq_dir.is_unavailable() {
@@ -205,6 +222,7 @@ impl Transition for SequencingSeqDir {
     }
 }
 
+/// Failed must only transition to itself, possibly updating its [Availability].
 impl Transition for FailedSeqDir {
     fn transition(self) -> SeqDirState {
         SeqDirState::Failed(FailedSeqDir {

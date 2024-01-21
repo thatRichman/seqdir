@@ -1,8 +1,5 @@
-use run_completion::CompletionStatus;
 use serde::Serialize;
 use std::convert::AsRef;
-use std::ffi::OsStr;
-use std::fs::read_dir;
 use std::num::ParseIntError;
 use std::path::Path;
 use std::path::PathBuf;
@@ -11,23 +8,20 @@ use thiserror::Error;
 pub mod manager;
 pub mod run_completion;
 
+pub use manager::DirManager;
+pub use manager::SeqDirState;
+pub use run_completion::CompletionStatus;
+pub use run_completion::Message;
+
 use crate::run_completion::parse_run_completion;
 
-const COPY_COMPLETE_TXT: &str = "CopyComplete.txt";
-const RTA_COMPLETE_TXT: &str = "RTAComplete.txt";
-const SEQUENCE_COMPLETE_TXT: &str = "SequenceComplete.txt";
-const SAMPLESHEET_CSV: &str = "SampleSheet.csv";
-const RUN_INFO_XML: &str = "RunInfo.xml";
-const RUN_COMPLETION_STATUS_XML: &str = "RunCompletionStatus.xml";
-const RUN_PARAMS_XML: &str = "RunParameters.xml";
-const LANES: [&str; 4] = ["L001", "L002", "L003", "L004"];
-const BASECALLS: &str = "Data/Intensities/BaseCalls/";
-const FILTER_EXT: &str = "filter";
-const CBCL: &str = "cbcl";
-const CBCL_GZ: &str = "cbcl.gz";
-const BCL: &str = "bcl";
-const BCL_GZ: &str = "bcl.gz";
-const CYCLE_PREFIX: &str = "C";
+pub const COPY_COMPLETE_TXT: &str = "CopyComplete.txt";
+pub const RTA_COMPLETE_TXT: &str = "RTAComplete.txt";
+pub const SEQUENCE_COMPLETE_TXT: &str = "SequenceComplete.txt";
+pub const SAMPLESHEET_CSV: &str = "SampleSheet.csv";
+pub const RUN_INFO_XML: &str = "RunInfo.xml";
+pub const RUN_COMPLETION_STATUS_XML: &str = "RunCompletionStatus.xml";
+pub const RUN_PARAMS_XML: &str = "RunParameters.xml";
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -48,121 +42,6 @@ pub enum SeqDirError {
     ParseIntError(#[from] ParseIntError),
     #[error("unexpected run completion status: {0}")]
     CompletionStatus(CompletionStatus),
-}
-
-/// A BCL or a CBCL
-#[derive(Clone, Debug, Serialize)]
-pub enum Bcl {
-    Bcl(PathBuf),
-    CBcl(PathBuf),
-}
-
-impl Bcl {
-    /// Construct Bcl variant from a path.
-    ///
-    /// Paths ending in 'bcl' or 'bcl.gz' are mapped to `Bcl`.
-    /// Paths ending in 'cbcl' or 'cbcl.gz' are mapped to `Cbcl`.
-    fn from_path<P: AsRef<Path>>(path: P) -> Option<Self> {
-        let path_str = path.as_ref().to_str()?;
-        if path_str.ends_with(CBCL) || path_str.ends_with(CBCL_GZ) {
-            Some(Self::CBcl(path.as_ref().to_owned()))
-        } else if path_str.ends_with(BCL) || path_str.ends_with(BCL_GZ) {
-            Some(Self::Bcl(path.as_ref().to_owned()))
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-/// A cycle consists of a cycle number and any number of bcls
-pub struct Cycle {
-    cycle_num: u16,
-    bcls: Vec<Bcl>,
-}
-
-impl Cycle {
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Cycle, SeqDirError> {
-        let cycle_num = path
-            .as_ref()
-            .file_stem()
-            .ok_or_else(|| SeqDirError::BadCycle(path.as_ref().to_owned()))?
-            .to_string_lossy()
-            .strip_prefix(CYCLE_PREFIX)
-            .ok_or_else(|| SeqDirError::BadCycle(path.as_ref().to_owned()))?
-            .parse::<u16>()?;
-
-        let bcls: Vec<Bcl> = read_dir(path)?
-            .filter_map(|c| c.ok())
-            .map(|c| c.path())
-            .filter_map(Bcl::from_path)
-            .collect();
-        if bcls.is_empty() {
-            return Err(SeqDirError::MissingBcls(cycle_num));
-        }
-
-        Ok(Cycle { cycle_num, bcls })
-    }
-
-    pub fn cycle_num(&self) -> u16 {
-        self.cycle_num
-    }
-
-    pub fn bcls(&self) -> &Vec<Bcl> {
-        &self.bcls
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-/// A lane consists of any number of cycles and any number of filters
-pub struct Lane<P: AsRef<Path>> {
-    cycles: Vec<Cycle>,
-    filters: Vec<P>,
-}
-
-impl<P> Lane<P>
-where
-    P: AsRef<Path>,
-{
-    fn from_path(path: P) -> Result<Lane<PathBuf>, SeqDirError> {
-        let (cycle_paths, other_files): (Vec<PathBuf>, Vec<PathBuf>) = read_dir(path)?
-            .filter_map(|p| p.ok())
-            .map(|p| p.path())
-            .partition(|p| {
-                p.is_dir()
-                    && p.file_name()
-                        .unwrap_or_else(|| OsStr::new(""))
-                        .to_str()
-                        .unwrap_or("")
-                        .starts_with(CYCLE_PREFIX)
-            });
-
-        let cycles: Vec<Cycle> = cycle_paths
-            .iter()
-            .map(Cycle::from_path)
-            .collect::<Result<Vec<Cycle>, SeqDirError>>()?;
-        if cycles.is_empty() {
-            return Err(SeqDirError::MissingCycles);
-        }
-
-        let filters: Vec<PathBuf> = other_files
-            .iter()
-            .filter(|p| {
-                p.is_file() && p.extension().unwrap_or_else(|| OsStr::new("")) == FILTER_EXT
-            })
-            .cloned()
-            .collect();
-
-        Ok(Lane { cycles, filters })
-    }
-
-    pub fn cycles(&self) -> &Vec<Cycle> {
-        &self.cycles
-    }
-
-    pub fn filters(&self) -> &Vec<P> {
-        &self.filters
-    }
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]
@@ -226,15 +105,8 @@ impl SeqDir {
         Ok(seq_dir)
     }
 
-    /// get lane data (if any) associated with the sequencing directory
-    ///
-    /// To keep SeqDir lightweight and to support incomplete sequencing runs, lanes are not stored
-    /// within the struct.
-    pub fn lanes(&self) -> Result<Vec<Lane<PathBuf>>, SeqDirError> {
-        detect_lanes(&self.root)
-    }
-
     /// Try to get the root of the sequencing directory.
+    ///
     /// Returns SeqDirError::NotFound if directory is inaccessible.
     pub fn try_root(&self) -> Result<&Path, SeqDirError> {
         self.root()
@@ -274,7 +146,7 @@ impl SeqDir {
         self.try_root().is_ok()
     }
 
-    // Returns true if the root directory cannot be read
+    /// Returns true if the root directory cannot be read
     pub fn is_unavailable(&self) -> bool {
         self.try_root().is_err()
     }
@@ -286,6 +158,7 @@ impl SeqDir {
     }
 
     /// Attempt to determine if a run has failed sequencing.
+    ///
     /// Uses RunCompletionStatus.xml. If RunCompletionStatus is not available, returns false.
     /// unlike other `is_` library methods, this is fallible because it must parse a file.
     pub fn is_failed(&self) -> Result<bool, SeqDirError> {
@@ -300,6 +173,7 @@ impl SeqDir {
     }
 
     /// Returns true if SequenceComplete.txt is not present
+    ///
     /// Convenience method, inverts `is_sequence_complete`
     pub fn is_sequencing(&self) -> bool {
         !self.is_sequence_complete()
@@ -341,6 +215,7 @@ impl SeqDir {
     }
 
     /// Get the path to RunCompletionStatus.xml
+    ///
     /// Returns Option because not all illumina sequencers / platform versions generate this file.
     /// To actually parse RunCompletionStatus.xml, see
     /// [get_completion_status](crate::SeqDir.get_completion_status)
@@ -350,17 +225,6 @@ impl SeqDir {
             .then_some(self.run_completion.as_path())
             .or(None)
     }
-}
-
-/// Find outputs per-lane for a sequencing directory and construct `Lane` objects
-/// Will only find lanes 'L001' - 'L004', because those are the only ones that should exist.
-pub fn detect_lanes<P: AsRef<Path>>(dir: P) -> Result<Vec<Lane<PathBuf>>, SeqDirError> {
-    LANES
-        .iter()
-        .map(|l| dir.as_ref().join(BASECALLS).join(l))
-        .filter(|l| l.exists())
-        .map(|l| Lane::from_path(dir.as_ref().join(l)))
-        .collect::<Result<Vec<Lane<PathBuf>>, SeqDirError>>()
 }
 
 #[cfg(test)]
@@ -384,7 +248,6 @@ mod tests {
         assert!(seq_dir.is_copy_complete());
         assert!(seq_dir.is_rta_complete());
         assert!(!seq_dir.is_sequencing());
-        assert!(seq_dir.lanes().is_ok())
     }
 
     #[test]

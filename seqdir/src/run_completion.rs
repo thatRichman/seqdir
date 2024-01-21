@@ -10,7 +10,9 @@ const COMPLETION_STATUS: &str = "CompletionStatus";
 const ERROR_DESCRIPTION: &str = "ErrorDescription";
 
 #[derive(Clone, Debug, Serialize)]
-/// A RunCompletionStatus message. Consists of a run_id and optional message content
+/// A RunCompletionStatus message.
+///
+/// Consists of a run_id and optional message content.
 pub struct Message {
     pub run_id: String,
     pub message: Option<String>,

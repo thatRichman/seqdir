@@ -337,10 +337,7 @@ impl SeqDirState {
 
     /// Returns true if current [Availability] is Available variant, and false otherwise
     pub fn available(&self) -> bool {
-        match self.availablity() {
-            Availability::Available(..) => true,
-            _ => false,
-        }
+        matches!(self.availablity(), Availability::Available(..))
     }
 
     /// Check the current availablity, possibly updating it, and return true if available
@@ -348,10 +345,7 @@ impl SeqDirState {
     /// See [available](SeqDirState::available()) for an immutable alternative.
     pub fn check_available(&mut self) -> bool {
         *self.availability_mut() = self.availability_mut().check(self.dir().root());
-        match self.availablity() {
-            Availability::Available(..) => true,
-            _ => false,
-        }
+        self.available()
     }
 }
 

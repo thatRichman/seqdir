@@ -2,6 +2,19 @@
 name = "seqdir"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.75"
+readme = "../README.md"
+license-file = "../COPYING"
+keywords = ["sequencing", "bioinformatics", "genomics"]
+categories = ["filesystem", "science"]
+repository = "https://github.com/thatRichman/seqdir"
+
+[lib]
+name = "seqdir"
+path = "src/lib.rs"
+
+[[example]]
+name = "seqerator"
 
 [dependencies]
 chrono = { version = "0.4.31", features = ["serde"] }
@@ -10,4 +23,5 @@ serde = { version = "1.0.193", features = ["derive"] }
 thiserror = "1.0.50"
 
 [dev-dependencies]
+rand = "0.8.5"
 serde_json = "1.0.111"

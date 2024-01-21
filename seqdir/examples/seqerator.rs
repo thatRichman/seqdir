@@ -1,6 +1,6 @@
 use rand::prelude::*;
 use seqdir::DirManager;
-use serde_json;
+
 use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -86,7 +86,7 @@ fn main() {
             }
             _ => {}
         };
-        c = c + 1;
+        c += 1;
         thread::sleep(Duration::from_secs(1));
     }
 

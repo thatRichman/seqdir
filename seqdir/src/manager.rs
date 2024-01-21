@@ -1,3 +1,56 @@
+//! Monitor the state of a sequencing directory
+//!
+//! The manager implements a state machine with the following transitions:
+//!
+//!```none
+//!        ┌──────────────────────┐
+//!        ▼                      │
+//!      ┌──────────────┐         │
+//!      │              │ ───┐    │
+//!      │    Failed    │    │    │
+//!      │              │ ◀──┘    │
+//!      └──────────────┘         │
+//!        ▲                      │
+//!        │                      │
+//!        │                      │
+//!      ┌──────────────┐         │
+//! ┌─── │              │         │
+//! │    │  Sequencing  │         │
+//! └──▶ │              │ ─┐      │
+//!      └──────────────┘  │      │
+//!        │               │      │
+//!        │               │      │
+//!        ▼               │      │
+//!      ┌──────────────┐  │      │
+//! ┌─── │              │  │      │
+//! │    │ Transferring │  │      │
+//! └──▶ │              │ ─┼──────┘
+//!      └──────────────┘  │
+//!        │               │
+//!        │               │
+//!        ▼               │
+//!      ┌──────────────┐  │
+//! ┌─── │              │  │
+//! │    │   Complete   │  │
+//! └──▶ │              │ ◀┘
+//!      └──────────────┘
+//!```
+//! Self-transitions are explicitly defined because even terminal states
+//! ([Complete](SeqDirState::Complete) and [Failed](SeqDirState::Failed)) may still update their
+//! [Availability] on every call to [poll](DirManager::poll()).
+//!
+//! Each state is represented by both an enum variant ([SeqDirState]) and a corresponding struct
+//! wrapped by the variant. [Transition] is implemented for each struct, which has a single method
+//! [transition](Transition::transition()) that defines when and how the current state should be
+//! consumed to produce another valid state. The logic for determining these transitions is
+//! explained in the docstring of each impl block, but they rely entirely on basic methods provided
+//! by the inner [SeqDir] itself, there is no magic.
+//!
+//! The state machine may only be updated as frequently as it is polled, it will not progress on
+//! its own.
+//!
+//! All states are serializable so that they may be treated as emitted events.
+
 use std::path::Path;
 
 use chrono::{DateTime, Utc};
@@ -305,41 +358,6 @@ impl SeqDirState {
 #[derive(Clone)]
 /// Implements a state machine for managing the state of a [SeqDir].
 ///
-/// The state transition diagram is as follows:
-///
-///```none
-///        ┌──────────────────────┐
-///        ▼                      │
-///      ┌──────────────┐         │
-///      │              │ ───┐    │
-///      │    Failed    │    │    │
-///      │              │ ◀──┘    │
-///      └──────────────┘         │
-///        ▲                      │
-///        │                      │
-///        │                      │
-///      ┌──────────────┐         │
-/// ┌─── │              │         │
-/// │    │  Sequencing  │         │
-/// └──▶ │              │ ─┐      │
-///      └──────────────┘  │      │
-///        │               │      │
-///        │               │      │
-///        ▼               │      │
-///      ┌──────────────┐  │      │
-/// ┌─── │              │  │      │
-/// │    │ Transferring │  │      │
-/// └──▶ │              │ ─┼──────┘
-///      └──────────────┘  │
-///        │               │
-///        │               │
-///        ▼               │
-///      ┌──────────────┐  │
-/// ┌─── │              │  │
-/// │    │   Complete   │  │
-/// └──▶ │              │ ◀┘
-///      └──────────────┘
-///```
 /// Once a directory has gone to either [Complete](SeqDirState::Complete) or
 /// [Failed](SeqDirState::Failed), it cannot transition back to another state.
 /// However, the [Availability] of the dir may still update on every call to [poll](DirManager::poll()).

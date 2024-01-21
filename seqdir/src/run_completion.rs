@@ -1,3 +1,13 @@
+//! Parse RunCompletionStatus.xml
+//!
+//! This module enables parsing on RunCompletionStatus.xml into [CompletionStatus] structs.
+//! Each CompletionStatus variant wraps a [Message] that contains at minimum a the associated
+//! sequencing run id, and may also include an optional message, which is parsed from the
+//! ErrorDescription tag.
+//!
+//! CompletionStatus and Message are both readily serializable so they can be treated as
+//! emitted events by higher-level implementations.
+
 use std::fmt::Display;
 use std::path::Path;
 use std::{fs::File, io::Read};
@@ -85,7 +95,7 @@ pub fn parse_run_completion<P: AsRef<Path>>(path: P) -> Result<CompletionStatus,
     }
     .to_string();
 
-    let message = match doc
+    let message_txt = match doc
         .descendants()
         .find(|elem| elem.has_tag_name(ERROR_DESCRIPTION))
     {
@@ -97,7 +107,10 @@ pub fn parse_run_completion<P: AsRef<Path>>(path: P) -> Result<CompletionStatus,
         None => None,
     };
 
-    let message = Message { run_id, message };
+    let message = Message {
+        run_id,
+        message: message_txt,
+    };
 
     match doc
         .descendants()

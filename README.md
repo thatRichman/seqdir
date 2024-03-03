@@ -1,5 +1,8 @@
 seqdir
 ----------
+
+## This library is under initial development and has not yet been released. Feel free to use, explore, and modify at your own risk.
+
 seqdir is a simple library for monitoring the state of Illum*na sequencing runs. It attempts to be small and lightweight. seqdir events are serializeable to \<your favorite format\>.
 
 ### Design
@@ -52,10 +55,13 @@ Please see [CHANGELOG](CHANGELOG) for the release history.
 ### Pre-emptively Answered Questions (PAQ)
 Q: Will you support other sequencing platforms?
 A: Maybe. Initially, only Illumina is supported because that is the platform I work with professionally.
+
    If you want to see other platforms supported, submit an issue with sufficient documentation to implement the behavior, or submit a PR.
 
 Q: Does it work?
+
 A: Hopefully!
 
 Q: Async?
-A: Not yet. I want to do it right and I'm not particularly fast at that.
+
+A: I don't think there's much to benefit from async here. If you disagree, let me know and I'll explore it.

@@ -19,7 +19,7 @@ const RUN_ID: &str = "RunId";
 const COMPLETION_STATUS: &str = "CompletionStatus";
 const ERROR_DESCRIPTION: &str = "ErrorDescription";
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 /// A RunCompletionStatus message.
 ///
 /// Consists of a run_id and optional message content.
@@ -40,7 +40,7 @@ impl Display for Message {
 }
 
 #[non_exhaustive]
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 #[serde(tag = "completion_status")]
 /// The completion status of a run as extracted from RunCompletionStatus.xml
 pub enum CompletionStatus {

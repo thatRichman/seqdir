@@ -5,6 +5,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use thiserror::Error;
 
+pub mod lane;
 pub mod manager;
 pub mod run_completion;
 

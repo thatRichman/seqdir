@@ -51,7 +51,7 @@
 //!
 //! All states are serializable so that they may be treated as emitted events.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
 use serde::Serialize;
@@ -455,20 +455,20 @@ impl DirManager {
 
 #[doc(hidden)]
 /// This SeqDirState contains a completely invalid SeqDir and is only used as a placeholder when
-/// `poll`ing for updated state. This really should not be used anywhere else.
+/// polling for updated state. This really should not be used anywhere else.
+/// This should be a very lightweight operation because none of the struct fields allocate
 fn _default() -> SeqDirState {
-    // TODO the overhead of reconstructing this every time isn't great
     let seq_dir = SeqDir {
-        root: Path::new("").to_owned(),
-        samplesheet: Path::new("").to_owned(),
-        run_info: Path::new("").to_owned(),
-        run_params: Path::new("").to_owned(),
-        run_completion: Path::new("").to_owned(),
+        root: PathBuf::new(),
+        samplesheet: PathBuf::new(),
+        run_info: PathBuf::new(),
+        run_params: PathBuf::new(),
+        run_completion: PathBuf::new(),
     };
     SeqDirState::Sequencing(SequencingSeqDir {
         seq_dir,
-        since: Utc::now(),
-        availability: Availability::Unavailable(Utc::now()),
+        since: DateTime::<Utc>::MIN_UTC,
+        availability: Availability::Unavailable(DateTime::<Utc>::MIN_UTC),
     })
 }
 
